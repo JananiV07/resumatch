@@ -1,0 +1,17 @@
+:root {
+  --accent: #6366f1;
+  --accent-2: #22d3ee;
+  --text: #e8eaf2;
+  --text-dim: #a3a8bd;
+  color-scheme: dark;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; min-height: 100vh; }
+body {
+  background: #0a0b14;
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
