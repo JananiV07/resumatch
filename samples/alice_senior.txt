@@ -1,0 +1,3 @@
+Alice Tan — Senior Backend Engineer
+
+Experienced Python engineer with 7 years building scalable REST APIs using FastAPI and Flask. Deployed microservices on AWS with Docker and Kubernetes. Strong in PostgreSQL, Redis, and CI/CD pipelines.

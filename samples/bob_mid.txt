@@ -1,0 +1,3 @@
+Bob Lee — Software Developer
+
+Python developer with 3 years experience. Built internal tools with Django and SQL databases. Some exposure to Docker. Comfortable with Git and Linux.
