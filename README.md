@@ -13,6 +13,7 @@ analysis, and a calibrated scoring model.
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.5-F7931E?logo=scikitlearn&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 <img src="resumatch.png" alt="ResuMatch ranking three candidates against a Senior Python Engineer job description" width="640" />
@@ -20,6 +21,21 @@ analysis, and a calibrated scoring model.
 </div>
 
 ---
+
+## Table of contents
+
+- [Why ResuMatch](#why-resumatch)
+- [Features](#features)
+- [How scoring works](#how-scoring-works)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [API](#api)
+- [Deployment](#deployment)
+- [Project structure](#project-structure)
+- [Testing](#testing)
+- [Roadmap](#roadmap)
+- [License](#license)
 
 ## Why ResuMatch
 
@@ -45,6 +61,7 @@ a recruiter can trust — and defend — the ranking.
   files are skipped with a warning instead of failing the whole run.
 - **Immersive UI** — a fast, modern single-page app with animated score gauges
   and signal bars.
+- **Container-ready** — Dockerfiles and a Compose file for one-command spin-up.
 
 ## How scoring works
 
@@ -71,17 +88,40 @@ a single fast `predict` call.
 
 ## Architecture
 
-```
-                 HTTP / JSON
-  React + Vite ───────────────►  FastAPI
-  (upload UI)  ◄───────────────  │
-                ranked results   │   parse(file)  →  extract_features  →  ranker.score
-                                 │   PDF/DOCX/TXT     BERT • skills •       LogisticRegression
-                                 │                    experience           (ranker.joblib)
-```
-
 The backend owns the entire ML pipeline; the frontend is a thin client that
 calls a single `POST /score` endpoint.
+
+```mermaid
+flowchart LR
+    U([Recruiter]) -->|job description + resumes| FE["React + Vite SPA"]
+    FE -->|POST /score| API["FastAPI service"]
+
+    subgraph PIPE["Scoring pipeline · per resume"]
+        direction TB
+        P["Parser<br/>PDF · DOCX · TXT"] --> F["Feature extraction"]
+        F --> S1["BERT semantic<br/>similarity"]
+        F --> S2["Skill overlap<br/>vs taxonomy"]
+        F --> S3["Experience<br/>years"]
+        S1 --> R["Ranker<br/>LogisticRegression"]
+        S2 --> R
+        S3 --> R
+        R --> EX["Score + tier<br/>+ explanation"]
+    end
+
+    API --> P
+    EX -->|ranked JSON| API
+    API -->|scores + explanations| FE
+    MODEL[("ranker.joblib")] -. loaded at startup .-> R
+```
+
+The ranker is produced **offline** and baked into the image, so requests never
+wait on training:
+
+```mermaid
+flowchart LR
+    G["Synthetic data<br/>generator"] --> T["scripts/train.py"]
+    T --> J[("ranker.joblib")]
+```
 
 ## Tech stack
 
@@ -89,6 +129,7 @@ calls a single `POST /score` endpoint.
   python-docx, rapidfuzz
 - **Frontend:** React, Vite, TypeScript (plain CSS, no UI framework)
 - **Testing:** pytest (backend), Vitest + Testing Library (frontend)
+- **Ops:** Docker, docker-compose, nginx (static frontend)
 
 ## Getting started
 
@@ -160,6 +201,83 @@ Candidates are returned sorted by score (descending). Unreadable files appear in
 ### `GET /health`
 Returns `{ "status": "ok", "ranker_loaded": true }`.
 
+## Deployment
+
+ResuMatch ships as two deployable units: a **backend container** (FastAPI + the
+ML pipeline) and a **static frontend** (Vite build served by any static host or
+the bundled nginx image). Both Dockerfiles and a Compose file are included.
+
+### Option A — Docker Compose (one command)
+
+The fastest way to run the whole stack in production-like containers:
+
+```bash
+docker compose up --build
+```
+
+- Frontend → http://localhost:5173
+- Backend  → http://localhost:8000
+
+The backend image **trains the ranker and pre-caches the embedding model at
+build time**, so the first request is fast and the container needs no network
+at runtime.
+
+> The frontend reads the API URL from the `VITE_API_BASE` build argument
+> (baked at build time, since Vite is a static bundle). For non-local
+> deployments, set it to your public backend URL in `docker-compose.yml` or as a
+> `--build-arg`.
+
+### Option B — Deploy the pieces separately
+
+**Backend (container).** Build and run anywhere that runs a container
+(Render, Railway, Fly.io, AWS ECS, Google Cloud Run, Azure Container Apps):
+
+```bash
+cd backend
+docker build -t resumatch-api .
+docker run -p 8000:8000 resumatch-api
+```
+
+Most platforms inject a `$PORT` — bind to it:
+
+```bash
+uvicorn resumatch.api:app --host 0.0.0.0 --port ${PORT:-8000}
+```
+
+For higher throughput, run multiple workers (note: each worker loads its own
+copy of the model, so size memory accordingly):
+
+```bash
+uvicorn resumatch.api:app --host 0.0.0.0 --port 8000 --workers 2
+```
+
+**Frontend (static).** Produce an optimized build and deploy the `dist/`
+folder to Vercel, Netlify, Cloudflare Pages, GitHub Pages, or any static host:
+
+```bash
+cd frontend
+VITE_API_BASE="https://your-api-host.com" npm run build
+# upload ./dist  (Vercel/Netlify: set build = "npm run build", output = "dist")
+```
+
+Or serve it with the bundled nginx image:
+
+```bash
+docker build --build-arg VITE_API_BASE="https://your-api-host.com" -t resumatch-web ./frontend
+docker run -p 8080:80 resumatch-web
+```
+
+### Production checklist
+
+- **CORS** — the API allows `localhost:5173` by default. Add your deployed
+  frontend origin to `allow_origins` in `backend/resumatch/api.py` (or wire it
+  to an environment variable) before going live.
+- **HTTPS** — terminate TLS at your platform's load balancer / reverse proxy.
+- **Model artifact** — the image bakes `ranker.joblib`; to retrain with your own
+  data, update `scripts/train.py` and rebuild.
+- **Health checks** — point your platform's probe at `GET /health`.
+- **Resources** — the embedding model needs roughly 300–500 MB RAM per worker.
+
 ## Project structure
 
 ```
@@ -174,11 +292,15 @@ backend/
     skills.json      # curated skill taxonomy
   scripts/train.py   # trains + serializes the ranker
   tests/             # pytest suite
+  Dockerfile
 frontend/
   src/
     api.ts                  # typed client
     components/             # ScoreGauge, CandidateCard, ResultsTable
     App.tsx                 # page shell
+  Dockerfile
+  nginx.conf
+docker-compose.yml
 ```
 
 ## Testing
