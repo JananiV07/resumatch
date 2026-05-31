@@ -1,0 +1,14 @@
+{
+  "skills": [
+    "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
+    "ruby", "php", "scala", "kotlin", "swift", "sql", "nosql", "react",
+    "angular", "vue", "svelte", "node.js", "express", "django", "flask",
+    "fastapi", "spring", "tensorflow", "pytorch", "scikit-learn", "pandas",
+    "numpy", "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
+    "ansible", "jenkins", "git", "ci/cd", "rest", "graphql", "grpc",
+    "postgresql", "mysql", "mongodb", "redis", "elasticsearch", "kafka",
+    "rabbitmq", "spark", "hadoop", "airflow", "machine learning",
+    "deep learning", "nlp", "computer vision", "data analysis", "linux",
+    "bash", "html", "css", "tailwind", "microservices", "agile", "scrum"
+  ]
+}
